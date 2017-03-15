@@ -19,8 +19,8 @@ defmodule SMPPEX.PduStorage do
 
   @spec start_link :: GenServer.on_start
 
-  def start_link(next_sequence_number \\ @default_next_sequence_number) do
-    GenServer.start_link(__MODULE__, [next_sequence_number])
+  def start_link(next_sequence_number \\ @default_next_sequence_number, opts \\ []) do
+    GenServer.start_link(__MODULE__, [next_sequence_number], opts)
   end
 
   @spec store(pid, Pdu.t, non_neg_integer) :: boolean
