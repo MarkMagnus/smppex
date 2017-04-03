@@ -13,7 +13,7 @@ defmodule SMPPEX.ESMEExtSeqNumTest do
     server = Server.start_link
     Timer.sleep(50)
 
-    {:ok, pdu_storage_pid} = PduStorage.start_link 100
+    {:ok, pdu_storage_pid} = PduStorage.start_link [next_sequence_number: 100]
 
     {callback_backup, esme} = SupportESME.start_link({127,0,0,1}, Server.port(server), [
       enquire_link_limit: 1000,
