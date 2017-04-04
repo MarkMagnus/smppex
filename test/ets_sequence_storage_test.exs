@@ -4,9 +4,9 @@ defmodule EtsSequenceStorageTest do
  alias SMPPEX.EtsSequenceStorage, as: Storage
 
  setup do
-   {:ok, pid} = Storage.start_link
+   Storage.start_link
    {table, key} = Storage.init_seq()
-   {:ok, %{pid: pid, table: table, key: key}}
+   {:ok, %{table: table, key: key}}
  end
 
  test "store sequence number", ctx do
