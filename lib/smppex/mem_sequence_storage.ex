@@ -20,7 +20,7 @@ defmodule SMPPEX.MemSequenceStorage do
   @doc """
     create sequence number table and key
   """
-  def init_seq(), do: GenServer.call(__MODULE__, :init_seq)
+  def init_seq(_params \\ []), do: GenServer.call(__MODULE__, :init_seq)
 
   @doc """
   returns the next sequence number
