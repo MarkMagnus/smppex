@@ -11,7 +11,7 @@ defmodule SMPPEX.PduStorageTest do
   end
 
   setup do
-    {pid, process} = PduStorageSupervisor.pdu_storage(SMPPEX.EtsSequenceStorage)
+    {pid, process} = PduStorageSupervisor.pdu_storage(SMPPEX.MemSequenceStorage)
     {:ok, %{pid: pid, process: process}}
   end
 

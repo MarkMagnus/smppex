@@ -7,8 +7,6 @@ defmodule SMPPEX.MemSequenceStorage do
 
   use GenServer
 
-  alias :ets, as: ETS
-
   @default_next_sequence_number 1
 
   def start_link() do
@@ -28,6 +26,10 @@ defmodule SMPPEX.MemSequenceStorage do
   returns the next sequence number
   """
   def get_next_seq(seq_table, seq_key), do: GenServer.call(__MODULE__, {:get_next_seq, seq_table, seq_key})
+
+  def state do
+    GenServer.call(__MODULE__, :state)
+  end
 
   @doc """
   stores last sequence number
@@ -51,14 +53,12 @@ defmodule SMPPEX.MemSequenceStorage do
   end
 
   def handle_call({:save_next_seq, seq_table, seq_key, seq_number}, _from, st) do
-    new_st = case st do
-      %{ ^seq_table => %{ ^seq_key => _ } } -> %{ seq_table => %{ seq_key => seq_number } }
-      _ -> %{ seq_table => %{ seq_key => @default_next_sequence_number }}
-    end
-    new_st = Map.merge(st, new_st)
+    new_st = Map.merge(st, %{ seq_table => %{ seq_key => seq_number}})
     {:reply, seq_number, new_st}
   end
 
-
+  def handle_call(:state, _from, st) do
+    {:reply, st, st}
+  end
   
 end
