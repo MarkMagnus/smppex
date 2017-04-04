@@ -1,8 +1,7 @@
-defmodule SMPPEX.EtsSequenceStorage do
+defmodule SMPPEX.MemSequenceStorage do
   @moduledoc """
-    This is ets sequence storage service, which allows all running pdu_storage processes share
-    sequence numbers and will servive shutdown of the pdu_storage service. If you care about
-    sequence number tracking this is all you need.
+    This is the default sequence storage service, which allows all running pdu_storage processes share
+    sequence numbers. If you don't care about sequence number tracking this is all you need.
   """
   @behaviour SMPPEX.SequenceStorage
 
@@ -38,21 +37,28 @@ defmodule SMPPEX.EtsSequenceStorage do
   end
 
   def handle_call(:init_seq, _from, st) do
-    seq_table = ETS.new(:sequence_number, [:set, :protected])
+    seq_table = :sequence_numbers
     seq_key = :crypto.strong_rand_bytes(10) |> Base.url_encode64 |> binary_part(0, 10)
     {:reply, {seq_table, seq_key}, st}
   end
 
   def handle_call({:get_next_seq, seq_table, seq_key}, _from, st) do
-    case ETS.lookup(seq_table, seq_key) do
-      [] -> {:reply, @default_next_sequence_number, st}
-      [{^seq_key, sequence_number}] -> {:reply, sequence_number, st}
+    seq_number = case st do
+      %{ ^seq_table => %{ ^seq_key => seq_number } } -> seq_number
+      _ -> @default_next_sequence_number
     end
-  end
-
-  def handle_call({:save_next_seq, seq_table, seq_key, seq_number}, _from, st) do
-    :ets.insert(seq_table, {seq_key, seq_number})
     {:reply, seq_number, st}
   end
 
+  def handle_call({:save_next_seq, seq_table, seq_key, seq_number}, _from, st) do
+    new_st = case st do
+      %{ ^seq_table => %{ ^seq_key => _ } } -> %{ seq_table => %{ seq_key => seq_number } }
+      _ -> %{ seq_table => %{ seq_key => @default_next_sequence_number }}
+    end
+    new_st = Map.merge(st, new_st)
+    {:reply, seq_number, new_st}
+  end
+
+
+  
 end

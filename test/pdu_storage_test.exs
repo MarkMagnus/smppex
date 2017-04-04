@@ -11,7 +11,7 @@ defmodule SMPPEX.PduStorageTest do
   end
 
   setup do
-    {pid, process} = PduStorageSupervisor.pdu_storage()
+    {pid, process} = PduStorageSupervisor.pdu_storage(SMPPEX.EtsSequenceStorage)
     {:ok, %{pid: pid, process: process}}
   end
 
@@ -84,7 +84,7 @@ defmodule SMPPEX.PduStorageTest do
     assert 3 == PduStorage.reserve_sequence_number(ctx.pid)
     assert 4 == PduStorage.reserve_sequence_number(ctx.pid)
 
-    {pid, process} = PduStorageSupervisor.pdu_storage()
+    {pid, _process} = PduStorageSupervisor.pdu_storage()
     assert 1 == PduStorage.reserve_sequence_number(pid)
     assert 2 == PduStorage.reserve_sequence_number(pid)
     assert 3 == PduStorage.reserve_sequence_number(pid)

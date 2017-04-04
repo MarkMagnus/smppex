@@ -14,7 +14,7 @@ defmodule SMPPEX.PduStorageSupervisor do
     instanciate new supervised PDU storage worker
   """
   def pdu_storage() do
-    pdu_storage(SMPPEX.EtsSequenceStorage)
+    pdu_storage(SMPPEX.MemSequenceStorage)
   end
 
   def pdu_storage(seq_store) do
@@ -35,7 +35,7 @@ defmodule SMPPEX.PduStorageSupervisor do
   end
 
   def seq_storage(seq_store) do
-    seq_storage_worker_spec = worker(SMPPEX.EtsSequenceStorage, [])
+    seq_storage_worker_spec = worker(seq_store, [])
     Supervisor.start_child(__MODULE__, seq_storage_worker_spec)
   end
   
