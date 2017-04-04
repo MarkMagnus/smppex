@@ -17,11 +17,11 @@ defmodule SMPPEX.PduStorageSupervisor do
     pdu_storage(SMPPEX.MemSequenceStorage)
   end
 
-  def pdu_storage(seq_store) do
-    seq_storage(seq_store)
+  def pdu_storage(seq_store, seq_store_params \\ %{}) do
+    seq_storage(seq_store) # only needs to one sequence store of any one type
 
-    {seq_table, seq_key} = seq_store.init_seq()
-    process_name = "pdu_storage_#{seq_key}" |> String.to_atom
+    {seq_table, seq_key} = seq_store.init_seq(seq_store_params)
+    process_name = "pdu_storage_#{seq_table}_#{seq_key}" |> String.to_atom
     pdu_storage_worker_spec = worker(
       SMPPEX.PduStorage,
       [

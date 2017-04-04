@@ -28,7 +28,7 @@ defmodule SMPPEX.PduStorage do
         Enum.into([seq_table: seq_table, seq_key: seq_key, seq_store: seq_store], %{})
       _ ->
         SMPPEX.MemSequenceStorage.start_link()
-        {seq_table, seq_key} = SMPPEX.MemSequenceStorage.init_seq()
+        {seq_table, seq_key} = SMPPEX.MemSequenceStorage.init_seq(params)
         Enum.into(params, %{seq_table: seq_table, seq_key: seq_key, seq_store: SMPPEX.MemSequenceStorage})
     end
 
