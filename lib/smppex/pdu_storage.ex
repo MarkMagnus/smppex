@@ -3,24 +3,36 @@ defmodule SMPPEX.PduStorage do
 
   use GenServer
 
+  require Integer
+
   alias :ets, as: ETS
 
   alias SMPPEX.PduStorage
   alias SMPPEX.Pdu
 
-  @default_next_sequence_number 1
-
   defstruct [
     :by_sequence_number,
-    :next_sequence_number
+    :next_sequence_number,
+    :seq_table,
+    :seq_key,
+    :seq_store
   ]
 
   @type t :: %PduStorage{}
+  @spec start_link(list, list) :: GenServer.on_start
 
-  @spec start_link :: GenServer.on_start
+  def start_link(params \\ [], opts \\ []) do
 
-  def start_link(next_sequence_number \\ @default_next_sequence_number, opts \\ []) do
-    GenServer.start_link(__MODULE__, [next_sequence_number], opts)
+    params = case params do
+      [seq_table: seq_table, seq_key: seq_key, seq_store: seq_store] ->
+        Enum.into([seq_table: seq_table, seq_key: seq_key, seq_store: seq_store], %{})
+      _ ->
+        SMPPEX.MemSequenceStorage.start_link()
+        {seq_table, seq_key} = SMPPEX.MemSequenceStorage.init_seq()
+        Enum.into(params, %{seq_table: seq_table, seq_key: seq_key, seq_store: SMPPEX.MemSequenceStorage})
+    end
+
+    GenServer.start_link(__MODULE__, params, opts)
   end
 
   @spec store(pid, Pdu.t, non_neg_integer) :: boolean
@@ -42,27 +54,44 @@ defmodule SMPPEX.PduStorage do
   end
 
   @spec reserve_sequence_number(pid) :: :pos_integer
-
   @doc """
-  Reserve a sequence number by getting current next sequence number and then incrementing.
+  Reserve a sequence number by gettingfl current next sequence number and then incrementing.
   Useful if you need to track sequence numbers externally.
   """
-
   def reserve_sequence_number(pid) do
     GenServer.call(pid, :reserve_sequence_number)
   end
 
-  def init([next_sequence_number]) do
+  @spec stop(pid) :: :any
+  def stop(pid), do: GenServer.cast(pid, :stop)
+
+  def state(pid), do: GenServer.call(pid, :state)
+
+  def init(params) do
+
+    next_sequence_number = case Map.has_key?(params, :next_sequence_number) do
+      true ->
+        params.next_sequence_number
+      false ->
+        params.seq_store.get_next_seq(params.seq_table, params.seq_key)
+    end
+
+    Process.flag(:trap_exit, true)
     {:ok, %PduStorage{
       by_sequence_number: ETS.new(:pdu_storage_by_sequence_number, [:set]),
-      next_sequence_number: next_sequence_number
+      next_sequence_number: next_sequence_number,
+      seq_table: params.seq_table,
+      seq_key: params.seq_key,
+      seq_store: params.seq_store
     }}
   end
 
-  def handle_cast(:reset_sequence_number, st) do
-    st = %PduStorage{st | next_sequence_number: @default_next_sequence_number}
+  def handle_cast(:stop, st) do
+    raise StopException
     {:noreply, st}
   end
+
+  def handle_call(:state, _from, st), do: {:reply, st, st}
 
   def handle_call({:store, pdu, expire_time}, _from, st) do
     sequence_number = Pdu.sequence_number(pdu)
@@ -89,11 +118,30 @@ defmodule SMPPEX.PduStorage do
 
   def handle_call(:reserve_sequence_number, _from, st) do
     {sequence_number, new_st} = increment_sequence_number(st)
+
+    cond do
+      Integer.mod(new_st.next_sequence_number, 100) == 0 ->
+        st.seq_store.save_next_seq(st.seq_table, st.seq_key, new_st.next_sequence_number)
+      true -> true
+    end
+
     {:reply, sequence_number, new_st}
+  end
+
+  def terminate(_reason, st) do
+    st.seq_store.save_next_seq(st.seq_table, st.seq_key, st.next_sequence_number)
   end
 
   defp increment_sequence_number(st) do
     {st.next_sequence_number, %PduStorage{st | next_sequence_number: st.next_sequence_number + 1}}
   end
 
+end
+
+defmodule StopException do
+  defexception message: "stopping process on request"
+end
+
+defimpl String.Chars, for: StopException do
+  def to_string(exception), do: exception.message
 end
