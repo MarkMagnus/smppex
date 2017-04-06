@@ -117,15 +117,9 @@ defmodule SMPPEX.PduStorage do
   end
 
   def handle_call(:reserve_sequence_number, _from, st) do
-    {sequence_number, new_st} = increment_sequence_number(st)
-
-    cond do
-      Integer.mod(new_st.next_sequence_number, 100) == 0 ->
-        st.seq_store.save_next_seq(st.seq_table, st.seq_key, new_st.next_sequence_number)
-      true -> true
-    end
-
-    {:reply, sequence_number, new_st}
+    new_next_sequence_number = st.seq_store.incr_seq(st.seq_table, st.seq_key, st.next_sequence_number)
+    new_st = %PduStorage{st | next_sequence_number: new_next_sequence_number}
+    {:reply, st.next_sequence_number, new_st}
   end
 
   def terminate(_reason, st) do
@@ -133,7 +127,7 @@ defmodule SMPPEX.PduStorage do
   end
 
   defp increment_sequence_number(st) do
-    {st.next_sequence_number, %PduStorage{st | next_sequence_number: st.next_sequence_number + 1}}
+    {st.next_sequence_number, }
   end
 
 end
