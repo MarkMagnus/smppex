@@ -23,19 +23,24 @@ defmodule SMPPEX.MemSequenceStorage do
   def init_seq(_params \\ []), do: GenServer.call(__MODULE__, :init_seq)
 
   @doc """
-  returns the next sequence number
+    returns the next sequence number
   """
   def get_next_seq(seq_table, seq_key), do: GenServer.call(__MODULE__, {:get_next_seq, seq_table, seq_key})
 
-  def state do
-    GenServer.call(__MODULE__, :state)
-  end
+  @doc """
+    increment next sequence number
+  """
+  def incr_seq(seq_table, seq_key, seq_number), do: GenServer.call(__MODULE__, {:incr_seq, seq_table, seq_key, seq_number})
 
   @doc """
   stores last sequence number
   """
   def save_next_seq(seq_table, seq_key, seq_number) do
     GenServer.call(__MODULE__, {:save_next_seq, seq_table, seq_key, seq_number})
+  end
+
+  def state do
+    GenServer.call(__MODULE__, :state)
   end
 
   def handle_call(:init_seq, _from, st) do
@@ -50,6 +55,12 @@ defmodule SMPPEX.MemSequenceStorage do
       _ -> @default_next_sequence_number
     end
     {:reply, seq_number, st}
+  end
+
+  def handle_call({:incr_seq, seq_table, seq_key, seq_number}, _from, st) do
+    next_seq_number = seq_number + 1
+    new_st = Map.merge(st, %{ seq_table => %{ seq_key => next_seq_number}})
+    {:reply, next_seq_number, new_st}
   end
 
   def handle_call({:save_next_seq, seq_table, seq_key, seq_number}, _from, st) do

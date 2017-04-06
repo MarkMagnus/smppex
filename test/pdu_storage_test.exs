@@ -72,7 +72,7 @@ defmodule SMPPEX.PduStorageTest do
     SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password")
     1..100 |> Enum.to_list |> Enum.each(fn _x -> PduStorage.reserve_sequence_number(ctx.pid) end)
     %{seq_table: seq_table, seq_key: seq_key, seq_store: seq_store} = PduStorage.state(ctx.pid)
-    assert 100 == seq_store.get_next_seq(seq_table, seq_key)
+    assert 101 == seq_store.get_next_seq(seq_table, seq_key)
 
   end
 

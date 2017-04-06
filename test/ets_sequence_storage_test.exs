@@ -13,7 +13,7 @@ defmodule EtsSequenceStorageTest do
 
    assert 1 == Storage.get_next_seq(ctx.table, ctx.key)
    assert 1001 == Storage.save_next_seq(ctx.table, ctx.key, 1001)
-   assert 1001 == Storage.get_next_seq(ctx.table, ctx.key)
+   assert 1101 == Storage.get_next_seq(ctx.table, ctx.key)
 
  end
 

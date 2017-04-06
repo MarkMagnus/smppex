@@ -10,7 +10,8 @@ defmodule SMPPEX.EtsSequenceStorage do
 
   alias :ets, as: ETS
 
-  @default_next_sequence_number 1
+  @init_next_sequence_number 1
+  @sequence_number_buffer 100
 
   def start_link() do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
@@ -31,6 +32,11 @@ defmodule SMPPEX.EtsSequenceStorage do
   def get_next_seq(seq_table, seq_key), do: GenServer.call(__MODULE__, {:get_next_seq, seq_table, seq_key})
 
   @doc """
+    increment next sequence number
+  """
+  def incr_seq(seq_table, seq_key, seq_number), do: GenServer.call(__MODULE__, {:incr_seq, seq_table, seq_key, seq_number})
+
+  @doc """
   stores last sequence number
   """
   def save_next_seq(seq_table, seq_key, seq_number) do
@@ -45,13 +51,27 @@ defmodule SMPPEX.EtsSequenceStorage do
 
   def handle_call({:get_next_seq, seq_table, seq_key}, _from, st) do
     case ETS.lookup(seq_table, seq_key) do
-      [] -> {:reply, @default_next_sequence_number, st}
-      [{^seq_key, sequence_number}] -> {:reply, sequence_number, st}
+      [] -> {:reply, @init_next_sequence_number, st}
+      [{^seq_key, seq_number}] ->
+        next_seq_number = seq_number + @sequence_number_buffer # insure that seq number is never regressed
+        ETS.insert(seq_table, {seq_key, next_seq_number})
+        {:reply, next_seq_number, st}
+    end
+  end
+
+  def handle_call({:incr_seq, seq_table, seq_key, seq_number}, _from, st) do
+    next_seq_number = seq_number + 1
+    cond do
+      Integer.mod(next_seq_number, @sequence_number_buffer) == 0 ->
+        ETS.insert(seq_table, {seq_key, next_seq_number})
+        {:reply, next_seq_number, st}
+      true ->
+        {:reply, next_seq_number, st}
     end
   end
 
   def handle_call({:save_next_seq, seq_table, seq_key, seq_number}, _from, st) do
-    :ets.insert(seq_table, {seq_key, seq_number})
+    ETS.insert(seq_table, {seq_key, seq_number})
     {:reply, seq_number, st}
   end
 
