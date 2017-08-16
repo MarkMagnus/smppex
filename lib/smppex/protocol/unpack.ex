@@ -5,11 +5,11 @@ defmodule SMPPEX.Protocol.Unpack do
 
   @null 0
 
-  @unexpected_data_end "Unexpected end of data"
-  @invalid_c_octet_string_format "C-Octet String: wrong format"
-  @invalid_fixed_c_octet_string "C-Octet String(fixed): invalid"
-  @invalid_c_octet_string_no_terminator "C-Octet String(var): null terminator not found"
-
+  @unexpected_data_end                    "Unexpected end of data"
+  @invalid_c_octet_string_format          "C-Octet String: wrong format"
+  @invalid_fixed_c_octet_string           "C-Octet String(fixed): invalid"
+  @invalid_c_octet_string_no_terminator   "C-Octet String(var): null terminator not found"
+  @invalid_bitstring_format               "Bit String: wrong format"
 
   @type unpack_error_result :: {:error, any}
 
@@ -58,6 +58,16 @@ defmodule SMPPEX.Protocol.Unpack do
         false -> {:error, @invalid_c_octet_string_format}
       end
       :not_found -> {:error, @invalid_c_octet_string_no_terminator}
+    end
+  end
+
+  def bitstring(bitstr, max_len) when max_len >= 1 and is_bitstring(bitstr) do
+    try do
+      case Helpers.take_bits(bitstr, max_len) do
+        :error         -> {:error, @invalid_bitstring_format}
+        {:ok, bitstr} -> {:ok, bitstr, <<>>}
+      end
+    rescue _e -> {:error, @invalid_bitstring_format}
     end
   end
 
