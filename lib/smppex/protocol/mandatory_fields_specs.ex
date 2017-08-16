@@ -8,6 +8,8 @@ defmodule SMPPEX.Protocol.MandatoryFieldsSpecs do
   @type field_spec :: {atom, field_value_spec}
   @type fields_spec :: list(field_spec | cases_spec)
 
+  @max_short_message_bits 1120 # 7bits * 160 == 16bits * 70 == 8bits * 140
+
   @spec spec_for(atom) :: fields_spec
 
   def spec_for(:bind_transmitter) do
@@ -102,7 +104,7 @@ defmodule SMPPEX.Protocol.MandatoryFieldsSpecs do
       {:data_coding, {:integer, 1}},
       {:sm_default_msg_id, {:integer, 1}},
       {:sm_length, {:integer, 1}},
-      {:short_message, {:octet_string, :sm_length}}
+      {:short_message, {:bitstring, @max_short_message_bits}}
     ]
   end
 
@@ -142,7 +144,7 @@ defmodule SMPPEX.Protocol.MandatoryFieldsSpecs do
       {:data_coding, {:integer, 1}},
       {:sm_default_msg_id, {:integer, 1}},
       {:sm_length, {:integer, 1}},
-      {:short_message, {:octet_string, :sm_length}}
+      {:short_message, {:bitstring, @max_short_message_bits}}
     ]
   end
 
@@ -178,7 +180,7 @@ defmodule SMPPEX.Protocol.MandatoryFieldsSpecs do
       {:data_coding, {:integer, 1}},
       {:sm_default_msg_id, {:integer, 1}},
       {:sm_length, {:integer, 1}},
-      {:short_message, {:octet_string, :sm_length}}
+      {:short_message, {:bitstring, @max_short_message_bits}}
     ]
   end
 
@@ -254,7 +256,7 @@ defmodule SMPPEX.Protocol.MandatoryFieldsSpecs do
       {:registered_delivery, {:integer, 1}},
       {:sm_default_msg_id, {:integer, 1}},
       {:sm_length, {:integer, 1}},
-      {:short_message, {:octet_string, :sm_length}}
+      {:short_message, {:bitstring, @max_short_message_bits}}
     ]
   end
 

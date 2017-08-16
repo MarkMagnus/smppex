@@ -76,5 +76,7 @@ defmodule SMPPEX.Protocol.MandatoryFieldsBuilder do
 
   defp build_simple_value(value, {:integer, n}), do: integer(value, n)
 
+  defp build_simple_value(value, {:bitstring, n}), do: bitstring(value, n)
+
 end
 

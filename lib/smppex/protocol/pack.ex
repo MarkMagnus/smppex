@@ -11,6 +11,7 @@ defmodule SMPPEX.Protocol.Pack do
   @invalid_c_octet_string_value "C-Octet String: invalid value"
   @invalid_c_octet_string_format "C-Octet String: invalid format"
   @invalid_octet_string "Octet String: invalid value"
+  @invalid_bit_string "Bit String: invalid value"
   @invalid_tlv_tag "TLV: invalid tag"
   @invalid_tlv_value "TLV: invalid value"
 
@@ -85,6 +86,15 @@ defmodule SMPPEX.Protocol.Pack do
       {:ok, str}
     else
       {:error, @invalid_octet_string}
+    end
+  end
+
+  def bitstring(str, _len) when not is_bitstring(str), do: {:error, @invalid_bit_string}
+  def bitstring(str, len) when is_integer(len) and len >= 0 do
+    if bit_size(str) <= len do
+      {:ok, str}
+    else
+      {:error, @invalid_bit_string}
     end
   end
 

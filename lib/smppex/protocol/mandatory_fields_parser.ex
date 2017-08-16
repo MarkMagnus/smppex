@@ -52,6 +52,10 @@ defmodule SMPPEX.Protocol.MandatoryFieldsParser do
     octet_string(bin, expand(n, parsed_fields))
   end
 
+  defp read_value(bitstr, {:bitstring, n}, parsed_fields) do
+    bitstring(bitstr, expand(n, parsed_fields))
+  end
+
   defp read_value(bin, {:times, n, specs}, parsed_fields) do
     case read_values(bin, {expand(n, parsed_fields), []}, specs, Map.new) do
       {:ok, values, rest} -> {:ok, Enum.reverse(values), rest}

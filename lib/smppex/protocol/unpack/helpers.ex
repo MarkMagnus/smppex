@@ -33,5 +33,11 @@ defmodule SMPPEX.Protocol.Unpack.Helpers do
     end
   end
 
+  @spec take_bits(bitstring, integer) :: :error | {:ok, bitstring}
+  def take_bits(bitstr, take_max) when is_bitstring(bitstr) and is_integer(take_max), do: _take_bits(bitstr, take_max)
+  defp _take_bits(bitstr, take_max) when bit_size(bitstr) <= take_max, do: {:ok, bitstr}
+  defp _take_bits(_bitstr, _take_max), do: :error
+
+
 end
 
