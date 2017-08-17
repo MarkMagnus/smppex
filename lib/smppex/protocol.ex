@@ -91,18 +91,18 @@ defmodule SMPPEX.Protocol do
     end
   end
 
-  defp build_body(pdu, header_bitstring, mandatory_specs) do
+  defp build_body(pdu, header_bin, mandatory_specs) do
     if build_body?(pdu) do
       case build_mandatory_fields(pdu, mandatory_specs) do
-        {:ok, mandatory_bitstring} ->
+        {:ok, mandatory_bin} ->
           case build_optional_fields(pdu) do
-            {:ok, optional_bitstring} -> {:ok, concat_pdu_bitstring_parts(header_bitstring, mandatory_bitstring, optional_bitstring)}
+            {:ok, optional_bin} -> {:ok, concat_pdu_binary_parts(header_bin, mandatory_bin, optional_bin)}
             {:error, error} -> {:error, {"Error building optional field part", error}}
           end
         {:error, error} -> {:error, {"Error building mandatory field part", error}}
       end
     else
-      {:ok, concat_pdu_bitstring_parts(header_bitstring, <<>>, <<>>)}
+      {:ok, concat_pdu_binary_parts(header_bin, "", "")}
     end
   end
 
@@ -132,12 +132,10 @@ defmodule SMPPEX.Protocol do
     pdu |> Pdu.optional_fields |> OptionalFieldsBuilder.build
   end
 
-  defp concat_pdu_bitstring_parts(header, mandatory, optional) do
-    pdu_data = [header, mandatory, optional]
-               |> List.flatten
-               |> Enum.reduce(<<>>, fn(x, acc) -> <<acc :: bitstring, x :: bitstring>> end)
+  defp concat_pdu_binary_parts(header, mandatory, optional) do
+    pdu_data = [header, mandatory, optional] |> List.flatten |> Enum.join
     size = byte_size(pdu_data) + 4
-    << size :: big-unsigned-integer-size(32), pdu_data :: bitstring >>
+    << size :: big-unsigned-integer-size(32), pdu_data :: binary >>
   end
 
 end
