@@ -92,11 +92,12 @@ defmodule SMPPEX.Pdu.Factory do
 
   @spec submit_sm(Pdu.addr, Pdu.addr, String.t, non_neg_integer) :: Pdu.t
 
-  def submit_sm({source_addr, source_addr_ton, source_addr_npi}, {dest_addr, dest_addr_ton, dest_addr_npi}, message, registered_delivery \\ 0) do
+  def submit_sm({source_addr, source_addr_ton, source_addr_npi}, {dest_addr, dest_addr_ton, dest_addr_npi}, message, registered_delivery \\ 0x00, data_coding \\ 0x00) do
     {:ok, command_id} = CommandNames.id_by_name(:submit_sm)
     Pdu.new(
       command_id,
       %{
+        data_coding: data_coding,
         source_addr: source_addr,
         source_addr_ton: source_addr_ton,
         source_addr_npi: source_addr_npi,

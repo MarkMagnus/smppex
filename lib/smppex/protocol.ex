@@ -106,7 +106,7 @@ defmodule SMPPEX.Protocol do
     end
   end
 
-  defp build_header(pdu) do
+  def build_header(pdu) do
     {command_id, command_status, sequence_number} = {
       Pdu.command_id(pdu),
       Pdu.command_status(pdu),
@@ -120,19 +120,19 @@ defmodule SMPPEX.Protocol do
     end
   end
 
-  defp build_body?(pdu) do
+  def build_body?(pdu) do
     !Pdu.resp?(pdu) || Pdu.success_resp?(pdu)
   end
 
-  defp build_mandatory_fields(pdu, specs) do
+  def build_mandatory_fields(pdu, specs) do
     pdu |> Pdu.mandatory_fields |> MandatoryFieldsBuilder.build(specs)
   end
 
-  defp build_optional_fields(pdu) do
+  def build_optional_fields(pdu) do
     pdu |> Pdu.optional_fields |> OptionalFieldsBuilder.build
   end
 
-  defp concat_pdu_binary_parts(header, mandatory, optional) do
+  def concat_pdu_binary_parts(header, mandatory, optional) do
     pdu_data = [header, mandatory, optional] |> List.flatten |> Enum.join
     size = byte_size(pdu_data) + 4
     << size :: big-unsigned-integer-size(32), pdu_data :: binary >>
