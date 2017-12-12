@@ -208,7 +208,7 @@ defmodule SMPPEX.ESME do
   @spec start_link(host :: term, port :: non_neg_integer, {module, args :: term}, opts :: Keyword.t) :: GenServer.on_start
 
   @doc """
-  Starts ESME entitiy.
+  Starts ESME entity.
 
   The function does not return until ESME successfully connects to the specified
   `host` and `port` and initializes or fails.
@@ -358,6 +358,7 @@ defmodule SMPPEX.ESME do
 
     esme = self()
     handler = fn(ref, _socket, _transport, session) ->
+      Process.link(esme)
       Kernel.send esme, {ref, session}
       {:ok, SMPPEX.ESME.SMPPHandler.new(esme)}
     end
@@ -553,6 +554,7 @@ defmodule SMPPEX.ESME do
 
   defp do_handle_stop(st) do
     _ = st.module.handle_stop(st.module_state)
+    Process.unlink(st.smpp_session)
     ClientPool.stop(st.client_pool)
     {:stop, :normal, :ok, st}
   end
