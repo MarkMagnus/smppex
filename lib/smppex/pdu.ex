@@ -354,6 +354,20 @@ defmodule SMPPEX.Pdu do
     resp?(pdu) and command_status(pdu) == 0
   end
 
+
+  @spec bind_success_resp?(t) :: boolean
+
+  @doc """
+  Checks if Pdu is a successful bind response Pdu.
+  command_status == 0, ok
+  command_status == 5, already bound also ok
+  """
+
+  def bind_success_resp?(pdu) do
+    command_status = command_status(pdu)
+    resp?(pdu) and (command_status == 0 or command_status == 5)
+  end
+
   @spec bind?(t) :: boolean
 
   @doc """

@@ -331,7 +331,6 @@ defmodule SMPPEX.ESME do
 
   @spec handle_pdu(pid, Pdu.t) :: :ok
 
-  @doc false
   def handle_pdu(esme, pdu) do
     GenServer.call(esme, {:handle_pdu, pdu})
   end
@@ -540,7 +539,7 @@ defmodule SMPPEX.ESME do
   end
 
   defp do_handle_bind_resp(pdu, st) do
-    case Pdu.success_resp?(pdu) do
+    case Pdu.bind_success_resp?(pdu) do
       true ->
         new_timers = SMPPTimers.handle_bind(st.timers, st.time)
         new_st = %ESME{st | timers: new_timers}
@@ -583,6 +582,7 @@ defmodule SMPPEX.ESME do
       {:ok, new_timers} ->
         new_st = %ESME{st | timers: new_timers, time: time}
         {:noreply, new_st}
+
       {:stop, reason} ->
         Logger.info("esme #{inspect self()}, being stopped by timers(#{reason})")
         Session.stop(st.smpp_session)
