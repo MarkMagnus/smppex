@@ -39,10 +39,10 @@ defmodule SMPPEX.ClientPool do
             {:certfile, cert_file},
             {:keyfile, key_file},
             {:verify, :verify_peer}
-          ]
+          ], []
         )
       _ ->
-        RanchServer.set_new_listener_opts(ref, capacity, [{:handler, handler}])
+        RanchServer.set_new_listener_opts(ref, capacity, [{:handler, handler}], [])
     end
     {:ok, pid} = RanchConnsSup.start_link(ref, :worker, :brutal_kill, transport, ack_timeout, SMPPEX.Session)
     {pid, ref, transport}
