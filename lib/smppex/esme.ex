@@ -363,7 +363,7 @@ defmodule SMPPEX.ESME do
     end
 
     pool_size = Keyword.get(esme_opts, :pool_size, @default_pool_size)
-    case start_session(handler, host, port, transport, timeout, pool_size) do
+    case start_session(handler, host, port, transport, timeout, pool_size, esme_opts) do
       {:ok, pool, session} ->
         init_esme(mod_with_args, pool, session, esme_opts)
       {:error, reason} -> {:stop, reason}
@@ -443,10 +443,15 @@ defmodule SMPPEX.ESME do
   end
 
   # Private functions
-  defp start_session(handler, host, port, transport, timeout, pool_size) do
+  defp start_session(handler, host, port, transport, timeout, pool_size, opts \\ []) do
     case transport.connect(host, port, [:binary, {:packet, 0}, {:active, :once}], timeout) do
       {:ok, socket} ->
-        pool = ClientPool.start(handler, pool_size, transport, timeout)
+        pool = case transport do
+          :ranch_tcp ->
+            ClientPool.start(handler, pool_size, transport, timeout)
+          :ranch_ssl ->
+            ClientPool.start(handler, pool_size, transport, timeout, opts[:cert_file], opts[:key_file])
+        end
         ClientPool.start_session(pool, socket)
         ref = ClientPool.ref(pool)
         receive do
