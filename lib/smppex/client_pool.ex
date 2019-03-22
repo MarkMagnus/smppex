@@ -8,6 +8,8 @@ defmodule SMPPEX.ClientPool do
 
   @default_capacity 500
   @default_transport :ranch_tcp
+  @default_cert_file "priv/host.crt"
+  @default_key_file "priv/host.key"
   @default_timeout 5000
 
   @type session :: term
@@ -16,11 +18,32 @@ defmodule SMPPEX.ClientPool do
 
   @type pool :: {pid, Ranch.ref, module}
 
-  @spec start(handler, non_neg_integer, module, non_neg_integer) :: pool
+  @spec start(handler, non_neg_integer, module, non_neg_integer, string, string) :: pool
 
-  def start(handler, capacity \\ @default_capacity, transport \\ @default_transport, ack_timeout \\ @default_timeout) do
+  def start(
+        handler,
+        capacity \\ @default_capacity,
+        transport \\ @default_transport,
+        ack_timeout \\ @default_timeout,
+        cert_file \\ @default_cert_file,
+        key_file \\ @default_key_file
+      ) do
     ref = make_ref()
-    RanchServer.set_new_listener_opts(ref, capacity, [{:handler, handler}])
+    case transport do
+      :ranch_ssl ->
+        RanchServer.set_new_listener_opts(
+          ref,
+          capacity,
+          [
+            {:handler, handler},
+            {:certfile, cert_file},
+            {:keyfile, key_file},
+            {:verify, :verify_peer}
+          ]
+        )
+      _ ->
+        RanchServer.set_new_listener_opts(ref, capacity, [{:handler, handler}])
+    end
     {:ok, pid} = RanchConnsSup.start_link(ref, :worker, :brutal_kill, transport, ack_timeout, SMPPEX.Session)
     {pid, ref, transport}
   end
