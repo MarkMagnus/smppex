@@ -18,15 +18,13 @@ defmodule SMPPEX.ClientPool do
 
   @type pool :: {pid, Ranch.ref, module}
 
-  @spec start(handler, non_neg_integer, module, non_neg_integer, string, string) :: pool
+  @spec start(handler, non_neg_integer, module, non_neg_integer) :: pool
 
   def start(
         handler,
         capacity \\ @default_capacity,
         transport \\ @default_transport,
-        ack_timeout \\ @default_timeout,
-        cert_file \\ @default_cert_file,
-        key_file \\ @default_key_file
+        ack_timeout \\ @default_timeout
       ) do
     ref = make_ref()
     case transport do
@@ -35,10 +33,7 @@ defmodule SMPPEX.ClientPool do
           ref,
           capacity,
           [
-            {:handler, handler},
-            {:certfile, cert_file},
-            {:keyfile, key_file},
-            {:verify, :verify_peer}
+            {:handler, handler}
           ], []
         )
       _ ->
