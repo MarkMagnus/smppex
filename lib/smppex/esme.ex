@@ -442,16 +442,27 @@ defmodule SMPPEX.ESME do
     {:noreply, new_st}
   end
 
+  @default_options [:binary, {:packet, 0}, {:active, :once}]
+  defp socket_options(:ranch_ssl, options) do
+    cert_file = Keyword.get(options, :certfile)
+    key_file = Keyword.get(options, :keyfile)
+    ssl_options = cond do
+        cert_file != nil and key_file != nil ->
+          [{:certfile, cert_file},{:keyfile, key_file}]
+        cert_file != nil ->
+          [{:certfile, cert_file}]
+        true -> []
+    end
+    @default_options ++ ssl_options
+  end
+  defp socket_options(_, _), do: @default_options
+
   # Private functions
   defp start_session(handler, host, port, transport, timeout, pool_size, opts \\ []) do
-    case transport.connect(host, port, [:binary, {:packet, 0}, {:active, :once}], timeout) do
+    socket_opts = socket_options(transport, opts)
+    case transport.connect(host, port, socket_opts, timeout) do
       {:ok, socket} ->
-        pool = case transport do
-          :ranch_tcp ->
-            ClientPool.start(handler, pool_size, transport, timeout)
-          :ranch_ssl ->
-            ClientPool.start(handler, pool_size, transport, timeout, opts[:cert_file], opts[:key_file])
-        end
+        pool = ClientPool.start(handler, pool_size, transport, timeout)
         ClientPool.start_session(pool, socket)
         ref = ClientPool.ref(pool)
         receive do
