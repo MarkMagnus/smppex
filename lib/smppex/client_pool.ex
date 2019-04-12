@@ -1,6 +1,8 @@
 defmodule SMPPEX.ClientPool do
   @moduledoc false
 
+  require Logger
+
   alias :erlang, as: Erlang
   alias :ranch, as: Ranch
   alias :ranch_server, as: RanchServer
@@ -18,26 +20,32 @@ defmodule SMPPEX.ClientPool do
 
   @type pool :: {pid, Ranch.ref, module}
 
-  @spec start(handler, non_neg_integer, module, non_neg_integer) :: pool
+  @spec start(handler, non_neg_integer, module, Keyword.t, non_neg_integer) :: pool
 
   def start(
         handler,
         capacity \\ @default_capacity,
         transport \\ @default_transport,
+        transport_opts \\ [],
         ack_timeout \\ @default_timeout
       ) do
     ref = make_ref()
     case transport do
       :ranch_ssl ->
+        Logger.info("set new listener options #{inspect ref} #{transport_opts}")
         RanchServer.set_new_listener_opts(
           ref,
           capacity,
-          [
-            {:handler, handler}
-          ], []
+          transport_opts ++ [{:handler, handler}],
+          []
         )
       _ ->
-        RanchServer.set_new_listener_opts(ref, capacity, [{:handler, handler}], [])
+        RanchServer.set_new_listener_opts(
+          ref,
+          capacity, [
+          {:handler, handler}],
+          []
+        )
     end
     {:ok, pid} = RanchConnsSup.start_link(ref, :worker, :brutal_kill, transport, ack_timeout, SMPPEX.Session)
     {pid, ref, transport}

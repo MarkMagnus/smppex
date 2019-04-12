@@ -37,7 +37,7 @@ defmodule SMPPEX.Session do
   # Ranch handles this return type, but Dialyzer is not happy with it
 
   def start_link(ref, socket, transport, opts) do
-	ProcLib.start_link(__MODULE__, :init, [ref, socket, transport, opts])
+    ProcLib.start_link(__MODULE__, :init, [ref, socket, transport, opts])
   end
 
   def init(ref, socket, transport, opts) do
@@ -145,6 +145,7 @@ defmodule SMPPEX.Session do
   end
 
   defp handle_socket_closed(state) do
+    Logger.warn("Error Socket Closed #{inspect state}")
     SMPPHandler.handle_socket_closed(state.session)
     do_stop(state)
   end

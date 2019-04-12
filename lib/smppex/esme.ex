@@ -356,6 +356,8 @@ defmodule SMPPEX.ESME do
   def init([host, port, mod_with_args, transport, timeout, esme_opts]) do
 
     esme = self()
+
+    # session factory
     handler = fn(ref, _socket, _transport, session) ->
       Process.link(esme)
       Kernel.send esme, {ref, session}
@@ -442,35 +444,42 @@ defmodule SMPPEX.ESME do
     {:noreply, new_st}
   end
 
-  @default_options [:binary, {:packet, 0}, {:active, :once}]
-  defp socket_options(:ranch_ssl, options) do
+  defp transport_options(:ranch_ssl, options) do
     cert_file = Keyword.get(options, :certfile)
     key_file = Keyword.get(options, :keyfile)
-    ssl_options = cond do
+    cond do
         cert_file != nil and key_file != nil ->
           [{:certfile, cert_file},{:keyfile, key_file}]
         cert_file != nil ->
           [{:certfile, cert_file}]
         true -> []
     end
-    @default_options ++ ssl_options
   end
-  defp socket_options(_, _), do: @default_options
+  defp transport_options(_, _), do: []
 
   # Private functions
-  defp start_session(handler, host, port, transport, timeout, pool_size, opts \\ []) do
-    socket_opts = socket_options(transport, opts)
+  @default_socket_options [:binary, {:packet, 0}, {:active, :once}]
+  defp start_session(handler, host, port, transport, timeout, pool_size, esme_opts \\ []) do
+    transport_opts = transport_options(transport, esme_opts) ++ [{:port, port}]
+    socket_opts = @default_socket_options ++ transport_opts
+    Logger.info("opening socket #{host}:#{port} #{transport} options #{inspect socket_opts} and #{inspect transport_opts}")
     case transport.connect(host, port, socket_opts, timeout) do
       {:ok, socket} ->
-        pool = ClientPool.start(handler, pool_size, transport, timeout)
+
+        Logger.info("opened socket #{host}:#{port} #{inspect socket}")
+
+        pool = ClientPool.start(handler, pool_size, transport, transport_opts, timeout)
+
         ClientPool.start_session(pool, socket)
         ref = ClientPool.ref(pool)
+
         receive do
           {^ref, session} ->
             {:ok, pool, session}
         after timeout ->
           {:error, :session_init_timeout}
         end
+
       {:error, _} = err -> err
     end
   end
