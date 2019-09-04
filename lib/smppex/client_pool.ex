@@ -27,19 +27,18 @@ defmodule SMPPEX.ClientPool do
         ack_timeout \\ @default_timeout
       ) do
     ref = make_ref()
-    case transport do
-      :ranch_ssl ->
-        RanchServer.set_new_listener_opts(
-          ref,
-          capacity,
-          [
-            {:handler, handler}
-          ], []
-        )
-      _ ->
-        RanchServer.set_new_listener_opts(ref, capacity, [{:handler, handler}], [])
-    end
-    {:ok, pid} = RanchConnsSup.start_link(ref, :worker, :brutal_kill, transport, ack_timeout, SMPPEX.Session)
+
+    protocol_options = [{:handler, handler}]
+    transport_options = %{
+      handshake_timeout: ack_timeout,
+      shutdown: :brutal_kill,
+      max_connections: capacity,
+    }
+    start_args = []
+    protocol = SMPPEX.Session
+
+    RanchServer.set_new_listener_opts(ref, capacity, transport_options, protocol_options, start_args)
+    {:ok, pid} = RanchConnsSup.start_link(ref, transport, protocol)
     {pid, ref, transport}
   end
 
