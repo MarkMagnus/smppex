@@ -39,7 +39,6 @@ defmodule Smppex.Mixfile do
       {:earmark, "~> 0.1", only: :dev},
       {:ex_doc, "~> 0.11", only: :dev},
       {:ranch, "~> 1.7.0"},
-      {:hexate,  ">= 0.6.0"},
     ]
   end
 
