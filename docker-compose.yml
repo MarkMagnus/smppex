@@ -1,0 +1,25 @@
+# This compose file is to be used only for local development and test env
+# It replicates a setup similar to production and staging with 'external' service instances
+# Variable substitution is applied to accommodate the different environments
+
+services:
+  
+  smppex:
+    build:
+      dockerfile: Dockerfile
+    stdin_open: true
+    tty: true
+    environment:
+      - MIX_ENV=dev      
+    working_dir: /usr/src/smppex
+    volumes:
+      - .:/usr/src/smppex
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 20000
+        hard: 40000    
+
+networks:
+  internal:
+    driver: bridge

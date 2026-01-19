@@ -9,10 +9,15 @@ defmodule SMPPEX.ESMETest do
   alias Support.ESME, as: SupportESME
   alias SMPPEX.ESME
   alias SMPPEX.Pdu
+  alias SMPPEX.PduStorageSupervisor
+  alias SMPPEX.MemSequenceStorage
 
   setup do
-    server = Server.start_link
+    server = Server.start_link()
     Timer.sleep(50)
+
+    {pdu_storage_pid, pdu_storage_process_name} = PduStorageSupervisor.pdu_storage()
+
 
     {callback_backup, esme} = SupportESME.start_link(
       {127, 0, 0, 1},
@@ -22,7 +27,9 @@ defmodule SMPPEX.ESMETest do
         enquire_link_resp_limit: 1000,
         inactivity_limit: 10000,
         response_limit: 2000,
-        timer_resolution: 100000
+        timer_resolution: 100000,
+        pdu_storage_pid: pdu_storage_pid,
+        pdu_storage_process_name: pdu_storage_process_name,
       ]
     )
 
@@ -168,7 +175,7 @@ defmodule SMPPEX.ESMETest do
     Timer.sleep(50)
 
     Process.flag(:trap_exit, true)
-    assert {:error, :oops} == ESME.start_link({127, 0, 0, 1}, Server.port(server), {Support.StoppingESME, :oops})
+    assert {:error, :killed} == ESME.start_link({127, 0, 0, 1}, Server.port(server), {Support.StoppingESME, :killed})
   end
 
   test "handle_pdu", ctx do
@@ -448,5 +455,5 @@ defmodule SMPPEX.ESMETest do
     Timer.sleep(50)
     refute Process.alive?(ctx[:esme])
   end
-  
+
 end

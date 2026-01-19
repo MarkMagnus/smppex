@@ -1,10 +1,10 @@
 defmodule SMPPEX.MemSequenceStorageTest do
   use ExUnit.Case
 
-  alias SMPPEX.MemSequenceStorage, as: Storage
+   alias SMPPEX.MemSequenceStorage, as: Storage
 
   setup do
-    Storage.start_link
+    {:ok, pid} = Storage.start_link()
     {table, key} = Storage.init_seq()
     {:ok, %{table: table, key: key}}
   end
@@ -16,5 +16,5 @@ defmodule SMPPEX.MemSequenceStorageTest do
     assert 1001 == Storage.get_next_seq(ctx.table, ctx.key)
 
   end
-  
+
 end

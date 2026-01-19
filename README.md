@@ -17,6 +17,11 @@ API documentation is available at http://hexdocs.pm/smppex
 
 There is a simple online demonstrational MC (SMPP server) at http://smppex.rubybox.ru
 
+
+## Development Environment
+
+run './dev.sh'
+
 ## Installation
 
 The package can be installed as:

@@ -8,12 +8,13 @@ defmodule SMPPEX.ESMEExtSeqNumTest do
   alias SMPPEX.ESME
   alias SMPPEX.Pdu
   alias SMPPEX.PduStorage
+  alias SMPPEX.PduStorageSupervisor
 
   setup do
     server = Server.start_link
     Timer.sleep(50)
 
-    {:ok, pdu_storage_pid} = PduStorage.start_link [next_sequence_number: 100]
+    {pdu_storage_pid, pdu_storage_process_name} = PduStorageSupervisor.pdu_storage()
 
     {callback_backup, esme} = SupportESME.start_link({127,0,0,1}, Server.port(server), [
       enquire_link_limit: 1000,
@@ -22,12 +23,13 @@ defmodule SMPPEX.ESMEExtSeqNumTest do
       response_limit: 2000,
       timer_resolution: 100000,
       pool_size: 5,
-      pdu_storage_pid: pdu_storage_pid
+      pdu_storage_pid: pdu_storage_pid,
+      pdu_storage_process_name: pdu_storage_process_name,
     ])
 
     Timer.sleep(50)
 
-    {:ok, esme: esme, callback_backup: callback_backup, server: server}
+    {:ok, esme: esme, callback_backup: callback_backup, server: server, pdu_storage_pid: pdu_storage_pid}
   end
 
   test "start_link, with new optional parameters" do
@@ -41,24 +43,27 @@ defmodule SMPPEX.ESMEExtSeqNumTest do
   test "successfully initiate sequence numbers", ctx do
 
     pdu = SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password")
-    ESME.send_pdu(ctx[:esme], pdu)
+    assert Pdu.sequence_number(pdu) == 0
+
+    PduStorage.save_next_sequence_number(ctx.pdu_storage_pid, 100)
+
+    ESME.send_pdu(ctx.esme, pdu)
     Timer.sleep(50)
 
     assert {:ok, {:pdu, pdu1r}, _rest_data} = Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse
     assert Pdu.sequence_number(pdu1r) == 100
-
   end
 
-  test "successfully allocate sequence numbers to pdu", ctx do
+  test "successfully override sequence number in pdu", ctx do
 
     pdu1 = SMPPEX.Pdu.Factory.bind_transmitter("system_id", "password")
-    pdu1 = %Pdu{pdu1 | sequence_number: 99}
+    pdu1 = %Pdu{pdu1 | sequence_number: 199}
     ESME.send_pdu(ctx[:esme], pdu1)
     Timer.sleep(50)
 
     assert {:ok, {:pdu, pdu1r}, _rest_data} = Server.received_data(ctx[:server]) |> SMPPEX.Protocol.parse
-    assert Pdu.sequence_number(pdu1r) == 99
+    assert Pdu.sequence_number(pdu1r) == 199
 
   end
-  
+
 end

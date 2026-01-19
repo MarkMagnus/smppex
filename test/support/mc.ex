@@ -73,7 +73,11 @@ defmodule Support.MC do
 
   defp register_callback(st, callback_info) do
     new_st = %{st | callbacks: [callback_info | st.callbacks], mc: self()}
-    Agent.update(st.st_backup, fn(_) -> new_st end)
+    case Process.alive?(st.st_backup) do
+      true -> Agent.update(st.st_backup, fn(_) -> new_st end)
+      false -> Logger.error("state backup process #{inspect st.st_backup} is not alive")
+    end
+
     new_st
   end
 

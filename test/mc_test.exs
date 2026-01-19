@@ -10,43 +10,56 @@ defmodule SMPPEX.MCTest do
   alias SMPPEX.ESME.Sync, as: ESME
   alias SMPPEX.Pdu
   alias SMPPEX.Pdu.Factory
+  alias SMPPEX.PduStorageSupervisor
+  alias SMPPEX.MemSequenceStorage
+  alias SMPPEX.PduStorage
 
   setup do
 
-    {pid, mc_server} = SupportMC.start_link([
-      mc_opts: [
+    {:ok, seq_store_pid} = MemSequenceStorage.start_link()
+    {seq_table, seq_key} = MemSequenceStorage.init_seq()
+    {:ok, pdu_storage_pid} = PduStorage.start_link([seq_table: seq_table, seq_key: seq_key, seq_store: MemSequenceStorage])
+
+    on_exit(fn ->
+      Process.exit(seq_store_pid, :kill)
+    end)
+
+    mc_opts = [
         enquire_link_limit: 1000,
         enquire_link_resp_limit: 1000,
         inactivity_limit: 10000,
         response_limit: 2000,
-        timer_resolution: 100000
+        timer_resolution: 100000,
+        pdu_storage_pid: pdu_storage_pid,
       ]
-    ])
-    port = Ranch.get_port(mc_server)
+
+    {mc_pid, mc_server_pid} = SupportMC.start_link([mc_opts: mc_opts])
+    port = Ranch.get_port(mc_server_pid)
 
     Timer.sleep(50)
-    {:ok, esme} = SMPPEX.ESME.Sync.start_link("127.0.0.1", port)
+    {:ok, esme} = SMPPEX.ESME.Sync.start_link("127.0.0.1", port, [esme_opts: mc_opts])
     session_init_time = SMPPEX.Time.monotonic
 
     Timer.sleep(50)
     {:ok,
       port: port,
       esme: esme,
-      st_backup: pid,
-      callbacks: fn() -> SupportMC.callbacks_received(pid) end,
-      mc: SupportMC.mc(pid),
+      #st_backup: pid,
+      callbacks: fn() -> SupportMC.callbacks_received(mc_pid) end,
+      mc: SupportMC.mc(mc_pid),
       session_init_time: session_init_time,
+      mc_opts: mc_opts,
     }
   end
 
-  test "start_link" do
+  test "start_link", ctx do
     {:ok, pid} = Agent.start_link(fn() -> [] end)
-    assert {:ok, _} = MC.start({SupportESME, %{callbacks: [], callback_backup: pid}}, [transport_opts: [port: 0]])
+    assert {:ok, _} = MC.start({SupportESME, %{mc_opts: ctx.mc_opts, callbacks: [], callback_backup: pid}}, [transport_opts: [port: 0]])
   end
 
-  test "stop" do
+  test "stop", ctx do
     {:ok, pid} = Agent.start_link(fn() -> [] end)
-    assert {:ok, mc_server} = MC.start({SupportESME, %{callbacks: [], callback_backup: pid}}, [transport_opts: [port: 0]])
+    assert {:ok, mc_server} = MC.start({SupportESME, %{mc_opts: ctx.mc_opts, callbacks: [], callback_backup: pid}}, [transport_opts: [port: 0]])
     assert :ok == MC.stop(mc_server)
   end
 
@@ -112,7 +125,7 @@ defmodule SMPPEX.MCTest do
     assert [{:init}] == ctx[:callbacks].()
   end
 
-  test "init, stop from init" do
+  test "init, stop from init", ctx do
 
     Process.flag(:trap_exit, true)
     {:ok, ref} = MC.start({Support.StoppingMC, :ooops})
@@ -120,7 +133,7 @@ defmodule SMPPEX.MCTest do
     port = Ranch.get_port(ref)
 
     Timer.sleep(50)
-    {:ok, esme} = SMPPEX.ESME.Sync.start_link("127.0.0.1", port)
+    {:ok, esme} = SMPPEX.ESME.Sync.start_link("127.0.0.1", port, [esme_opts: ctx.mc_opts])
 
     pdu = Factory.bind_transmitter("system_id", "password")
     assert :stop = ESME.request(esme, pdu)
@@ -229,11 +242,13 @@ defmodule SMPPEX.MCTest do
     assert Pdu.command_id(enquire_link) |> CommandNames.name_by_id == {:ok, :enquire_link}
   end
 
-  test "stop by bind timeout" do
+  test "stop by bind timeout", ctx do
     {pid, mc_server} = SupportMC.start_link([
       mc_opts: [
         session_init_limit: 30,
-        timer_resolution: 5
+        timer_resolution: 5,
+        pdu_storage_pid: ctx.mc_opts[:pdu_storage_pid],
+        pdu_storage_process_name: ctx.mc_opts[:pdu_storage_process_name],
       ]
     ])
     port = Ranch.get_port(mc_server)
@@ -297,6 +312,7 @@ defmodule SMPPEX.MCTest do
     assert [
       {:init},
       {:handle_pdu, _},
+      {:handle_resp_timeout, _},
       {:handle_send_pdu_result, _, _}, # Enquire link
       {:handle_stop}
     ] = ctx[:callbacks].()
@@ -306,14 +322,16 @@ defmodule SMPPEX.MCTest do
   test "stop by inactivity timeout", ctx do
     pdu = Factory.bind_transmitter("system_id1", "pass1")
     SMPPEX.ESME.send_pdu(ctx[:esme], pdu)
-    time = ctx[:session_init_time]
+    time = SMPPEX.Time.monotonic
+
     Timer.sleep(50)
-    Kernel.send(ctx[:mc], {:tick, time + 10050})
+    Kernel.send(ctx[:mc], {:tick, time + ctx[:mc_opts][:inactivity_limit] + 50})
     Timer.sleep(50)
 
     assert [
       {:init},
       {:handle_pdu, _}, # bind_transmitter sent
+      {:handle_resp_timeout, _},
       {:handle_stop}
     ] = ctx[:callbacks].()
     refute Process.alive?(ctx[:mc])

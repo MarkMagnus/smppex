@@ -10,7 +10,7 @@ defmodule Support.TCP.Server do
     :port
   ]
 
-  def start_link do
+  def start_link() do
     port = Support.TCP.Helpers.find_free_port
 
     {:ok, received_data_pid} = Agent.start_link(fn() -> %{data: <<>>, messages: []} end)

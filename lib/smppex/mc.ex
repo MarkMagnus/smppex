@@ -51,7 +51,8 @@ defmodule SMPPEX.MC do
     :smpp_session,
     :module,
     :module_state,
-    :pdu_storage,
+    :pdu_storage_pid,
+    :pdu_storage_process_name,
     :timers,
     :response_limit,
     :time,
@@ -212,7 +213,6 @@ defmodule SMPPEX.MC do
   # Public interface
 
   @default_transport :ranch_tcp
-  @default_acceptor_count 50
 
   @spec start({module, args :: term}, opts :: Keyword.t) :: {:ok, listener_ref :: Ranch.ref} | {:error, reason :: term}
 
@@ -226,7 +226,6 @@ defmodule SMPPEX.MC do
   `ranch_ssl`;
   * `:transport_opts` is a list of Ranch transport options. The major option is `{:port, port}`. The port is
   set to `0` by default, which means that the listener will accept connections on a random free port.
-  * `:acceptor_count` is the number of Ranch listener acceptors, #{@default_acceptor_count} by default.
   * `:gen_server_opts` is a list of options passed directly to the underlying `GenServer.start_link` call,
   the default is `[]`;
   * `:mc_opts` is a keyword list of MC options:
@@ -245,6 +244,8 @@ defmodule SMPPEX.MC do
       - `:response_limit` is the maximum time to wait for a response for a previously sent PDU. If the response is
       not received within this interval, `handle_resp_timeout` callback is triggered for the original pdu. If the response
       is received later, it is discarded. The default value is #{@default_response_limit} ms.
+      - `:pdu_storage_pid`
+      - `:pdu_storage_process_name`
   If `:mc_opts` list of options is ommited, all options take their default values.
 
   The returned value is either `{:ok, ref}` or `{:error, reason}`. The `ref` can be later used
@@ -252,7 +253,6 @@ defmodule SMPPEX.MC do
   """
   def start({_module, _args} = mod_with_args, opts \\ []) do
 
-    acceptor_count = Keyword.get(opts, :acceptor_count, @default_acceptor_count)
     transport = Keyword.get(opts, :transport, @default_transport)
     transport_opts = Keyword.get(opts, :transport_opts, [{:port, 0}])
     mc_opts = Keyword.get(opts, :mc_opts, [])
@@ -264,7 +264,7 @@ defmodule SMPPEX.MC do
       end
     end
     ref = make_ref()
-    case Ranch.start_listener(ref, acceptor_count, transport, transport_opts, Session, [handler: handler]) do
+    case Ranch.start_listener(ref, transport, transport_opts, Session, [handler: handler]) do
       {:error, _} = error -> error
       {:ok, _, _} -> {:ok, ref}
       {:ok, _} -> {:ok, ref}
@@ -364,6 +364,8 @@ defmodule SMPPEX.MC do
   # GenServer callbacks
 
   def init([{module, args}, mc_opts, _ref, socket, transport, session]) do
+
+    #logger.info("mc mc_opts #{inspect mc_opts}")
     case module.init(socket, transport, args) do
       {:ok, state} ->
         timer_resolution = Keyword.get(mc_opts, :timer_resolution, @default_timer_resolution)
@@ -384,12 +386,8 @@ defmodule SMPPEX.MC do
           inactivity_limit
         )
 
-        pdu_storage_pid = case Keyword.get(mc_opts, :pdu_storage_pid, nil) do
-          nil ->
-            {:ok, pid} = PduStorage.start_link()
-            pid
-          pid -> pid
-        end
+        pdu_storage_pid = Keyword.get(mc_opts, :pdu_storage_pid, nil)
+        pdu_storage_process_name = Keyword.get(mc_opts, :pdu_storage_process_name, nil)
 
         response_limit = Keyword.get(mc_opts, :response_limit, @default_response_limit)
 
@@ -397,7 +395,8 @@ defmodule SMPPEX.MC do
           smpp_session: session,
           module: module,
           module_state: state,
-          pdu_storage: pdu_storage_pid,
+          pdu_storage_pid: pdu_storage_pid,
+          pdu_storage_process_name: pdu_storage_process_name,
           timers: timers,
           response_limit: response_limit,
           time: time,
@@ -478,6 +477,7 @@ defmodule SMPPEX.MC do
   defp start_mc(mod_with_args, ref, socket, transport, session, opts) do
     gen_server_opts = Keyword.get(opts, :gen_server_opts, [])
     mc_opts = Keyword.get(opts, :mc_opts, [])
+    #:logger.info("start mc #{inspect mod_with_args} with opts #{inspect opts}")
     GenServer.start_link(
       __MODULE__,
       [mod_with_args, mc_opts, ref, socket, transport, session],
@@ -500,7 +500,7 @@ defmodule SMPPEX.MC do
     sequence_number = Pdu.sequence_number(pdu)
     new_timers = SMPPTimers.handle_peer_action(st.timers, st.time)
     new_st = %MC{st | timers: new_timers}
-    case PduStorage.fetch(st.pdu_storage, sequence_number) do
+    case PduStorage.fetch(st.pdu_storage_pid, sequence_number) do
       [] ->
         Logger.info("mc #{inspect self()}, resp for unknown pdu(sequence_number: #{sequence_number}), dropping")
         {:reply, :ok, new_st}
@@ -533,7 +533,7 @@ defmodule SMPPEX.MC do
   end
 
   defp do_handle_tick(time, st) do
-    expired_pdus = PduStorage.fetch_expired(st.pdu_storage, time)
+    expired_pdus = PduStorage.fetch_expired(st.pdu_storage_pid, time)
     new_st = do_handle_expired_pdus(expired_pdus, st)
     do_handle_timers(time, new_st)
   end
@@ -569,11 +569,12 @@ defmodule SMPPEX.MC do
   defp do_send_pdu(pdu, st) do
 
     pdu = case pdu.sequence_number do
-      0 -> %Pdu{pdu | sequence_number: PduStorage.reserve_sequence_number(st.pdu_storage)}
+      0 -> %Pdu{pdu | sequence_number: PduStorage.reserve_sequence_number(st.pdu_storage_pid)}
       _ -> pdu
     end
 
-    true = PduStorage.store(st.pdu_storage, pdu, st.time + st.response_limit)
+    :logger.info("storing with time #{st.time} #{st.response_limit} #{st.time + st.response_limit}")
+    true = PduStorage.store(st.pdu_storage_pid, pdu, st.time + st.response_limit)
     Session.send_pdu(st.smpp_session, pdu)
 
     st

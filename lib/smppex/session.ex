@@ -2,6 +2,7 @@ defmodule SMPPEX.Session do
   @moduledoc false
 
   @behaviour :ranch_protocol
+  @timeout 5000
 
   use GenServer
   require Logger
@@ -35,17 +36,22 @@ defmodule SMPPEX.Session do
 
   # @spec start_link(Ranch.ref, term, module, Keyword.t) :: {:ok, pid} | {:error, term}
   # Ranch handles this return type, but Dialyzer is not happy with it
-
-  def start_link(ref, socket, transport, opts) do
-	ProcLib.start_link(__MODULE__, :init, [ref, socket, transport, opts])
+  @impl true
+  def start_link(ref, transport, opts) do
+    ProcLib.start_link(__MODULE__, :init, [{ref, transport, opts}])
   end
 
-  def init(ref, socket, transport, opts) do
+  @impl true
+  def init({ref, transport, opts}) do
+
     session_factory = Proplists.get_value(:handler, opts)
-    case session_factory.(ref, socket, transport, self()) do
+    case session_factory.(ref, nil, transport, self()) do
       {:ok, session} ->
         :ok = ProcLib.init_ack({:ok, self()})
-        :ok = Ranch.accept_ack(ref)
+
+        {:ok, socket} = Ranch.handshake(ref)
+        #:logger.info("handshake complete #{inspect socket}")
+
         state = %{
           ref: ref,
           socket: socket,
@@ -53,20 +59,26 @@ defmodule SMPPEX.Session do
           session: session,
           buffer: <<>>
         }
-        wait_for_data(state)
+
+        set_socket_to_waiting(state) # for first message
+
         SMPPHandler.after_init(session)
-        ErlangGenServer.enter_loop(__MODULE__, [], state)
+
+        ErlangGenServer.enter_loop(__MODULE__, [], state, @timeout)
       {:error, _} = error ->
         :ok = ProcLib.init_ack(error)
     end
   end
 
-  defp wait_for_data(state) do
+  # processing one message at a time
+  # once a message is received active is set back to false
+  def set_socket_to_waiting(state) do
     :ok = state.transport.setopts(state.socket, [{:active, :once}])
   end
 
+  @impl true
   def handle_info(message, state) do
-    {ok, closed, error} = state.transport.messages
+    {ok, closed, error, passive} = state.transport.messages
     socket = state.socket
     case message do
       {^ok, ^socket, data} ->
@@ -75,6 +87,9 @@ defmodule SMPPEX.Session do
         handle_socket_closed(state)
       {^error, ^socket, reason} ->
         handle_socket_error(state, reason)
+      {^passive, ^socket, data} ->
+        # new with ranch upgrade, hopefully safe to ignore
+        Logger.warning("received passive message #{inspect data}")
       other ->
         Logger.info("Unrecognized message: #{inspect other}")
     end
@@ -113,7 +128,7 @@ defmodule SMPPEX.Session do
     case SMPP.parse(data) do
       {:ok, nil, data} ->
         new_state = %{state | buffer: data}
-        wait_for_data(state)
+        set_socket_to_waiting(state)
         {:noreply, new_state}
       {:ok, parse_result, rest_data} ->
         handle_parse_result(state, parse_result, rest_data)

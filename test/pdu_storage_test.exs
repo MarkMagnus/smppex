@@ -11,7 +11,7 @@ defmodule SMPPEX.PduStorageTest do
   end
 
   setup do
-    {pid, process} = PduStorageSupervisor.pdu_storage(SMPPEX.MemSequenceStorage)
+    {pid, process} = PduStorageSupervisor.pdu_storage()
     {:ok, %{pid: pid, process: process}}
   end
 
@@ -58,7 +58,6 @@ defmodule SMPPEX.PduStorageTest do
     assert 3 == PduStorage.reserve_sequence_number(ctx.pid)
     assert 4 == PduStorage.reserve_sequence_number(ctx.pid)
 
-    #Process.exit(ctx.pid, :kill)
     PduStorage.stop(ctx.pid)
     :timer.sleep(1000)
     assert ctx.pid != Process.whereis(ctx.process)

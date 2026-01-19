@@ -64,4 +64,21 @@ defmodule SMPPEX.SequenceStorage do
   """
   @callback save_next_seq(String.t, any, integer) :: integer
 
+  @doc """
+    force save next sequence number to storage
+
+    ## Comment
+    `save_on_termination` should behave exactly the same as 'save_next_seq`
+    but cannot be served by a GenServer function.
+
+    Return: :ok
+
+    ## Parameters
+    - table_name: name of table
+    - storage_key: key for value
+    - next_sequence_number: value
+  """
+  @callback save_on_termination(String.t, any, integer) :: :ok
+
+
 end

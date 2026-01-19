@@ -44,7 +44,8 @@ defmodule SMPPEX.ESME do
     :smpp_session,
     :module,
     :module_state,
-    :pdu_storage,
+    :pdu_storage_pid,
+    :pdu_storage_process_name,
     :timers,
     :response_limit,
     :time,
@@ -234,6 +235,8 @@ defmodule SMPPEX.ESME do
       - `:response_limit` is the maximum time to wait for a response for a previously sent PDU. If the response is
       not received within this interval, `handle_resp_timeout` callback is triggered for the original pdu. If the response
       is received later, it is discarded. The default value is #{@default_response_limit} ms.
+      - `pdu_storage_pid`
+      - `pdu_storage_process_name'
   If `:esme_opts` list of options is ommited, all options take their default values.
 
   The whole `opts` argument may also be ommited in order to start ESME with the defaults.
@@ -366,7 +369,8 @@ defmodule SMPPEX.ESME do
     case start_session(handler, host, port, transport, timeout, pool_size, esme_opts) do
       {:ok, pool, session} ->
         init_esme(mod_with_args, pool, session, esme_opts)
-      {:error, reason} -> {:stop, reason}
+      {:error, reason} ->
+        {:stop, reason}
     end
   end
 
@@ -463,12 +467,15 @@ defmodule SMPPEX.ESME do
     case transport.connect(host, port, socket_opts, timeout) do
       {:ok, socket} ->
         pool = ClientPool.start(handler, pool_size, transport, timeout)
-        ClientPool.start_session(pool, socket)
         ref = ClientPool.ref(pool)
+        ClientPool.start_session(pool, socket)
+
         receive do
           {^ref, session} ->
+            #:logger.info("session started #{inspect session}")
             {:ok, pool, session}
         after timeout ->
+          #:logger.info("session timeout")
           {:error, :session_init_timeout}
         end
       {:error, _} = err -> err
@@ -496,21 +503,19 @@ defmodule SMPPEX.ESME do
           inactivity_limit
         )
 
+        pdu_storage_pid = Keyword.get(esme_opts, :pdu_storage_pid, nil)
+        pdu_storage_process_name = Keyword.get(esme_opts, :pdu_storage_process_name, nil)
 
-        pdu_storage_pid = case Keyword.get(esme_opts, :pdu_storage_pid, nil) do
-          nil ->
-              {:ok, pid} = PduStorage.start_link()
-              pid
-          pid -> pid
-        end
         response_limit = Keyword.get(esme_opts, :response_limit, @default_response_limit)
+
 
         {:ok, %ESME{
           client_pool: pool,
           smpp_session: session,
           module: module,
           module_state: state,
-          pdu_storage: pdu_storage_pid,
+          pdu_storage_pid: pdu_storage_pid,
+          pdu_storage_process_name: pdu_storage_process_name,
           timers: timers,
           response_limit: response_limit,
           time: time,
@@ -534,7 +539,7 @@ defmodule SMPPEX.ESME do
     new_timers = SMPPTimers.handle_peer_action(st.timers, st.time)
     new_st = %ESME{st | timers: new_timers}
 
-    case PduStorage.fetch(st.pdu_storage, sequence_number) do
+    case PduStorage.fetch(st.pdu_storage_pid, sequence_number) do
       [] ->
         # don't drop response pdu for sequence numbers which not recognized
         # with_session maybe in use
@@ -561,7 +566,6 @@ defmodule SMPPEX.ESME do
         new_st = %ESME{st | timers: new_timers}
         {:reply, :ok, new_st}
       false ->
-        Logger.info("esme #{inspect self()}, bind failed with status #{Pdu.command_status(pdu)}, stopping")
         Session.stop(st.smpp_session)
         {:reply, :ok, st}
     end
@@ -581,7 +585,7 @@ defmodule SMPPEX.ESME do
   end
 
   defp do_handle_tick(time, st) do
-    expired_pdus = PduStorage.fetch_expired(st.pdu_storage, time)
+    expired_pdus = PduStorage.fetch_expired(st.pdu_storage_pid, time)
     new_st = do_handle_expired_pdus(expired_pdus, st)
     do_handle_timers(time, new_st)
   end
@@ -598,9 +602,7 @@ defmodule SMPPEX.ESME do
       {:ok, new_timers} ->
         new_st = %ESME{st | timers: new_timers, time: time}
         {:noreply, new_st}
-
       {:stop, reason} ->
-        Logger.info("esme #{inspect self()}, being stopped by timers(#{reason})")
         Session.stop(st.smpp_session)
         {:noreply, st}
       {:enquire_link, new_timers} ->
@@ -616,13 +618,15 @@ defmodule SMPPEX.ESME do
   end
 
   defp do_send_pdu(pdu, st) do
-
     pdu = case pdu.sequence_number do
-      0 -> %Pdu{pdu | sequence_number: PduStorage.reserve_sequence_number(st.pdu_storage)}
-      _ -> pdu
+      0 ->
+        sequence_number = PduStorage.reserve_sequence_number(st.pdu_storage_pid)
+        %Pdu{pdu | sequence_number: sequence_number}
+      _ ->
+        pdu
     end
 
-    true = PduStorage.store(st.pdu_storage, pdu, st.time + st.response_limit)
+    true = PduStorage.store(st.pdu_storage_pid, pdu, st.time + st.response_limit)
     Session.send_pdu(st.smpp_session, pdu)
 
     st

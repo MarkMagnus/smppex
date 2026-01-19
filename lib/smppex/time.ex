@@ -4,13 +4,14 @@ defmodule SMPPEX.Time do
 
   otp_release = :erlang.system_info(:otp_release)
   case :string.to_integer(otp_release) do
-    {17, ''} ->
+    {17, _} ->
       def monotonic do
         {mega, sec, micro} = :erlang.now
         (mega * 1_000_000 + sec) * 1000 + div(micro, 1000)
       end
-    {n, ''} when n >= 18 ->
+    {n, _} when n >= 18 ->
       def monotonic do
+        # don't us system time which is effected by time distortions
         :erlang.monotonic_time(:milli_seconds)
       end
     _ ->

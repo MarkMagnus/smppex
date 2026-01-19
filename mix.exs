@@ -35,10 +35,10 @@ defmodule Smppex.Mixfile do
   defp deps do
     [
       {:excoveralls, "~> 0.5", only: :test},
-      {:dialyxir, git: "https://github.com/jeremyjh/dialyxir.git", only: :dev},
-      {:earmark, "~> 0.1", only: :dev},
-      {:ex_doc, "~> 0.11", only: :dev},
-      {:ranch, "~> 1.7.0"},
+      {:dialyxir, "~> 1.3" , only: [:dev, :test], runtime: false},
+      {:earmark, "~> 1.4", only: :dev},
+      {:ex_doc, "~> 0.39", only: :dev},
+      {:ranch, "~> 2.0"},
     ]
   end
 

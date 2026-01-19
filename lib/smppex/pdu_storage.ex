@@ -4,6 +4,7 @@ defmodule SMPPEX.PduStorage do
   use GenServer
 
   require Integer
+  require Logger
 
   alias :ets, as: ETS
 
@@ -27,11 +28,11 @@ defmodule SMPPEX.PduStorage do
       [seq_table: seq_table, seq_key: seq_key, seq_store: seq_store] ->
         Enum.into([seq_table: seq_table, seq_key: seq_key, seq_store: seq_store], %{})
       _ ->
-        SMPPEX.MemSequenceStorage.start_link()
         {seq_table, seq_key} = SMPPEX.MemSequenceStorage.init_seq(params)
         Enum.into(params, %{seq_table: seq_table, seq_key: seq_key, seq_store: SMPPEX.MemSequenceStorage})
     end
 
+    #:logger.info("started pdu storage #{inspect params}")
     GenServer.start_link(__MODULE__, params, opts)
   end
 
@@ -51,6 +52,10 @@ defmodule SMPPEX.PduStorage do
 
   def fetch_expired(pid, expire_time) do
     GenServer.call(pid, {:fetch_expired, expire_time})
+  end
+
+  def save_next_sequence_number(pid, new_seq) do
+    GenServer.call(pid, {:save_next_sequence_number, new_seq})
   end
 
   @spec reserve_sequence_number(pid) :: :pos_integer
@@ -77,6 +82,7 @@ defmodule SMPPEX.PduStorage do
     end
 
     Process.flag(:trap_exit, true)
+
     {:ok, %PduStorage{
       by_sequence_number: ETS.new(:pdu_storage_by_sequence_number, [:set]),
       next_sequence_number: next_sequence_number,
@@ -122,12 +128,14 @@ defmodule SMPPEX.PduStorage do
     {:reply, st.next_sequence_number, new_st}
   end
 
-  def terminate(_reason, st) do
-    st.seq_store.save_next_seq(st.seq_table, st.seq_key, st.next_sequence_number)
+  def handle_call({:save_next_sequence_number, next_sequence_number}, _from, st) do
+    st.seq_store.save_next_seq(st.seq_table, st.seq_key, next_sequence_number)
+    new_st = %PduStorage{st | next_sequence_number: next_sequence_number}
+    {:reply, next_sequence_number, new_st}
   end
 
-  defp increment_sequence_number(st) do
-    {st.next_sequence_number, }
+  def terminate(_reason, st) do
+    st.seq_store.save_on_termination(st.seq_table, st.seq_key, st.next_sequence_number)
   end
 
 end
